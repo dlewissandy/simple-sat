@@ -16,12 +16,19 @@ module Logic.Expression(
     isVariable,
     isDisjunction,
     isConjunction,
+    -- * Satisfiability
+    isSat, interpretations, assign, isSolution,
+    -- * Utilities
+    appendNamespaces
     ) where
 
 import Prelude hiding (and)
 -- FROM STACKAGE
+import           Data.Bits ((.|.),testBit)
+import qualified Data.Set as S
 import           Data.Vector(Vector)
 import qualified Data.Vector as V
+import           Data.List(sort, partition)
 -- FROM THIS PACKAGE
 import           Logic.Expression.Internal(Internal)
 import qualified Logic.Expression.Internal as L
@@ -77,24 +84,83 @@ ands = liftNary L.ands
 -------------------------------------------------------------------------------
 -- QUERY FUNCTIONS
 ------------------------------------------------------------------------------
+-- | O(1) - test for logical truth.   Returns True if and only if the
+-- Expression is the boolean literal True.
 isTrue :: (Ord a) => Expr a -> Bool
 isTrue (EXPR _ x) = x==V.singleton 0
 
+-- | O(1) - test for logical falsity.   Returns True if and only if the
+-- Expression is the boolean literal False.
 isFalse :: Expr a -> Bool
 isFalse z@(EXPR _ x )= V.null x
 
+-- | O(1) - Returns True if and only if the
+-- Expression consists of a single variable.
 isVariable :: Expr a -> Bool
 isVariable (EXPR _ x) = let
    x0 = V.unsafeHead x
    in ( 1 == V.length x ) && ( (x0==1) || (0 == mod x0 2) )
 
+-- | O(1) - Returns True if and only if the Expression is an exclusive
+-- disjunction of two or more terms.
 isDisjunction :: Expr a -> Bool
 isDisjunction (EXPR _ x) = V.length x > 1
 
+-- | O(1) - Returns True if and only if the expression is a conjunction
+-- of two or more variables.
 isConjunction :: Expr a -> Bool
 isConjunction (EXPR _ x) =
     let x0 = V.unsafeHead x
-    in  ( x0 > 1 ) -- && ( 0 /= mod x0 2)
+    in  (1 == V.length x) && ( x0 > 1 ) && ( 0 /= mod x0 2)
+
+{- | O(n). Return the list of variables which occur in an expression. -}
+variables :: (Ord a) => Expr a -> [a]
+variables (EXPR vs xs) =
+    let bits = V.foldr (.|.) 0 xs
+    in  [ vs!!i | i<-[0.. length vs - 1], bits `testBit` i]
+
+-------------------------------------------------------------------------------
+-- SATISFIABILITY
+-------------------------------------------------------------------------------
+{- | O(2^n).  Test for satisfiability.  A proposition is satisifiable if
+    there is an assignment of variables which makes it "true.   -}
+isSat :: (Ord a) => [ Expr a ] -> Bool
+isSat  = L.isSat . fmap (\ ( EXPR _ xs) -> xs ) . appendNamespaces
+
+{- | O(n). Replace all the occurances of a given variable with a boolean
+literal. -}
+assign :: (Ord a) => [(a,Bool)] -> [ Expr a ] -> [ Expr a ]
+assign binds exprs = case exprs of
+    [] -> []        -- assignment to a trivial equationset
+    ((EXPR vars _ ):_)  -> case binds of
+        [] -> exprs -- trivial assignments.
+        _  ->
+            -- partition the list into variables that are to be assigned truth
+            -- and falsehood.  Then create a single monomial (power product)
+            -- of the partitioned variables.
+            let (ts,fs) = partition snd binds
+                (EXPR _ tz) = ands [ appendNamespace vars $ variable t | (t,_)<- ts ]
+                (EXPR _ fz) = ands [ appendNamespace vars $ variable f | (f,_)<- fs ]
+            -- Call the internal routine for assignment of those values
+            in  fmap (\ (EXPR _ x) ->
+                   EXPR vars $ L.assign (L.assign x (V.unsafeHead fz) False) (V.unsafeHead tz) True) exprs
+
+{- | O(2^n).  Obtain a unique (up to term ordering)
+set of expressions for which the given expression
+is true.  The set of interpretations must have the
+property that @ors (interpretations expr) `implies`
+expr@ -}
+interpretations :: (Ord a) => [Expr a] -> [[(a,Bool)]]
+interpretations [] = [[]]
+interpretations xs =
+    let xs'@((EXPR vs _ ):_) = appendNamespaces xs
+        zs = fmap (\ (EXPR _ a) -> a) xs'
+    in  fmap (fmap (\ (i,b)->(vs!!i,b) ) . S.toList ) (S.toList $ L.interpretations zs)
+
+-- | Test if a given set of assignments is a solution
+
+isSolution :: (Ord a)=>[(a,Bool)] ->[Expr a] -> Bool
+isSolution binds = all isTrue . assign binds
 
 -------------------------------------------------------------------------------
 -- UTILITIES
@@ -155,6 +221,8 @@ liftBinary op x y =
     let [EXPR vs x', EXPR _ y'] = appendNamespaces [x,y]
     in  EXPR vs (x' `op` y')
 
+-- | Given an n-ary logical operator on the internal representation, lift it
+-- to the Expr type.
 liftNary :: (Ord a) => ([ Internal ] -> Internal )
    -> [ Expr a ] -> Expr a
 liftNary f xs = case xs of

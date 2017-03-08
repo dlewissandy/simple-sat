@@ -16,7 +16,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Logic.Expression
                        Logic.Expression.Internal
-  build-depends:       base, vector
+  build-depends:       base, vector, containers
   default-language:    Haskell2010
 
 test-suite simple-sat-test

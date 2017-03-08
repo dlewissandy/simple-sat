@@ -55,13 +55,39 @@ alltests = testGroup "simple-sat" [
         ],
     testGroup "ands" [
         isFold "isFold" ands and true
-        ]
+        ],
+    testGroup "isSat" satTests,
+    testGroup "interpretations" interpTests
     ]
     where
     t :: Expr Char
     t = true
     f :: Expr Char
     f = false
+    -- Verify the semantics of isSat.   A list of expressions is satisfyiable
+    -- if and only if there is some non-empty set of interpretations for the
+    -- bound variables.
+    satTests :: [ TestTree ]
+    satTests = [
+        testCase "isSat([true])" $ assertBool "" $ isSat [t] == True,
+        testCase "isSat([false])" $ assertBool "" $ isSat [f] == False,
+        testProperty "isSat<=>not.null.interpretations" $
+           forAll (listOf arbitrary :: Gen [Expr Char]) $ \ xs ->
+               (isSat xs) == (not $ null $ interpretations xs)
+        ]
+    -- | Verify that the naive implementation of the sat solver and the actual
+    -- sat solver find the same interpretations.
+    interpTests :: [ TestTree ]
+    interpTests = [
+        testProperty "areSolutions" $
+           forAll (listOf arbitrary :: Gen [Expr Char]) $ \ xs ->
+              let xs' = appendNamespaces xs
+                  zs  = interpretations xs'
+              in  if (all (\ z -> isSolution z xs' ) zs)
+                     then True
+                     else error $ "assign (interpretations xs) xs="++show (fmap (\z ->assign z xs') zs) ++
+                                  "\n interpretations xs = "++show zs
+        ]
 
 isAssociative :: String -> (Expr Char -> Expr Char -> Expr Char) -> TestTree
 isAssociative testname op = testProperty testname $
@@ -101,6 +127,7 @@ isFold testname op f b = testProperty testname $
     forAll (listOf arbitrary) $ \ xs -> case xs of
         []      -> op xs == b
         (x:xs') -> op xs == f x (op xs')
+
 
 {- Build an arbitrary proposition with up to 6 variables -}
 instance Arbitrary (Expr Char) where
