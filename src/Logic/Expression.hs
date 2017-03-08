@@ -66,18 +66,27 @@ false = EXPR [] V.empty
 true :: Expr a
 true = EXPR [] (V.singleton 0)
 
+-- | /O(1)/ - Construct a variable from the given symbol.
 variable :: a -> Expr a
 variable a = EXPR [a] (V.singleton 1)
 
+-- | /O(n^2) - Construct an expression representing the binary conjunction of
+-- two expressions.
 and :: (Ord a)=>Expr a -> Expr a -> Expr a
 and = liftBinary L.and
 
+-- | /O(n) - Construct an expression representing the binary exclusive
+-- disjunction of two expressions.
 xor :: (Ord a)=>Expr a -> Expr a -> Expr a
 xor = liftBinary L.xor
 
+-- | /O(n) - Construct an expression representing the n-ary exclusive disjunction of
+-- a list of expressions.
 xors :: (Ord a)=>[Expr a]->Expr a
 xors = liftNary L.xors
 
+-- | /O(m*n^2) - Construct an expression representing the n-ary conjunction of
+-- a list of expressions.
 ands :: (Ord a)=>[Expr a]->Expr a
 ands = liftNary L.ands
 
@@ -158,7 +167,6 @@ interpretations xs =
     in  fmap (fmap (\ (i,b)->(vs!!i,b) ) . S.toList ) (S.toList $ L.interpretations zs)
 
 -- | Test if a given set of assignments is a solution
-
 isSolution :: (Ord a)=>[(a,Bool)] ->[Expr a] -> Bool
 isSolution binds = all isTrue . assign binds
 

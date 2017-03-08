@@ -91,7 +91,7 @@ assign expr vars False =
 
 {- | O(2^n) Given an expression, p, obtain a list xs of expressions such that
 @or xs == p@ and for each x in xs then @x and p@ is true.  This function uses
-a modified DPLL algorithm.   -}
+a backtracking serach algorithm.   -}
 interpretations :: [Internal] -> Set (Set (Int,Bool))
 interpretations exprs0 = go [([],exprs0)]
     where

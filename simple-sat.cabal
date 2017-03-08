@@ -1,6 +1,10 @@
 name:                simple-sat
 version:             0.1.0.0
 synopsis:            A minimal SAT solver for boolean algebras
+description:         This package provides a simple syntax for performing
+                     algebraic manipulations on polynomials over boolean rings
+                     and for determining the satisfiabiliity of systems of
+                     boolean expressions.
 homepage:            https://github.com/githubuser/simple-sat
 license:             BSD3
 license-file:        LICENSE
@@ -15,7 +19,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Logic.Expression
-                       Logic.Expression.Internal
+  other-modules:       Logic.Expression.Internal
   build-depends:       base, vector, containers
   default-language:    Haskell2010
 
