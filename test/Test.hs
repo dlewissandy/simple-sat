@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main(main) where
 
 import qualified Prelude
-import Prelude hiding (and)
+import Prelude hiding (and,not,or)
 import Control.Monad
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -19,13 +20,13 @@ alltests = testGroup "simple-sat" [
     -- Tests for literals.  Verify that the predicate isTrue
     testGroup "true" [
         testCase "isTrue(true)"  $ assertBool "" $ isTrue t,
-        testCase "isFalse(true)" $ assertBool "" $ not $ isFalse t
+        testCase "isFalse(true)" $ assertBool "" $ Prelude.not $ isFalse t
         ],
     -- Verify that the predicate false returns true only for statements that
     -- are false.
     testGroup "false" [
         testCase "isFalse(false)" $ assertBool "" $ isFalse f,
-        testCase "isTrue(false)"  $ assertBool "" $ not $ isTrue f
+        testCase "isTrue(false)"  $ assertBool "" $ Prelude.not $ isTrue f
         ],
     testGroup "variable" [],
     -- tests for boolean operators
@@ -38,6 +39,27 @@ alltests = testGroup "simple-sat" [
         isCommutative "isCommutative" xor,
         isNeutralElementOf "NeutralElem" false xor,
         areInverseElementsOf "Inverses" id xor false Nothing
+        ],
+    testGroup "or" [
+        testProperty "deMorgan" $
+            forAll arbitrary $ \ p ->
+            forAll arbitrary $ \ q ->
+                p `or` q == not ((not p) `and` (not q :: Expr Char))
+        ],
+    testGroup "not" [
+        testProperty "not p = p+1" $
+            forAll arbitrary $ \ p ->
+                not p == p `xor` t
+        ],
+    testGroup "implies" [
+        testProperty "p=>q = (not p) or q" $
+            forAll arbitrary $ \ p -> forAll arbitrary $ \q ->
+                p `implies` q == (not p) `or` (q::Expr Char)
+        ],
+    testGroup "equals" [
+        testProperty "p<=>q = not (p `xor` q)" $
+            forAll arbitrary $ \ p -> forAll arbitrary $ \q ->
+                p `equals` q == not (p `xor` (q::Expr Char))
         ],
     testGroup "xors" [
         isFold "isFold" xors xor false
@@ -73,7 +95,13 @@ alltests = testGroup "simple-sat" [
         testCase "isSat([false])" $ assertBool "" $ isSat [f] == False,
         testProperty "isSat<=>not.null.interpretations" $
            forAll (listOf arbitrary :: Gen [Expr Char]) $ \ xs ->
-               (isSat xs) == (not $ null $ interpretations xs)
+               (isSat xs) == (Prelude.not $ null $ interpretations xs),
+        testProperty "isSat<=>not.isConflict" $
+           forAll (listOf arbitrary :: Gen [Expr Char]) $ \ xs ->
+               (isSat xs) == (Prelude.not $ isConflict xs),
+        testProperty "isRefutable<=>not.isTautology" $
+           forAll (listOf arbitrary :: Gen [Expr Char]) $ \ xs ->
+               (isRefutable xs) == (Prelude.not $ isTautology xs)
         ]
     -- | Verify that the naive implementation of the sat solver and the actual
     -- sat solver find the same interpretations.

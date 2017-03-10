@@ -21,7 +21,7 @@ module Logic.Expression(
     isDisjunction,
     isConjunction,
     -- * Satisfiability
-    isSat, interpretations, assign, isSolution,
+    isSat,isRefutable,isConflict,isTautology, interpretations, assign, isSolution,
     -- * Utilities
     appendNamespaces, fromAST
     ) where
@@ -155,6 +155,19 @@ isConjunction (EXPR _ x) =
 isSat :: (Ord a) => [ Expr a ] -> Bool
 isSat  = L.isSat . fmap (\ ( EXPR _ xs) -> xs ) . appendNamespaces
 
+{- | O(2^n).  Is the given set of equations always true?   -}
+isTautology :: (Ord a) => [ Expr a ] -> Bool
+isTautology  xs = [[]] == interpretations xs
+
+{- | O(2^n).  Is there a an interpretation which will make the set of expressions
+   false?   -}
+isRefutable :: (Ord a) => [ Expr a ] -> Bool
+isRefutable xs  = isSat [ not $ ands xs ]
+
+{- | O(2^n).  Is the set of equations always false   -}
+isConflict :: (Ord a) => [ Expr a ] -> Bool
+isConflict  = P.not . isSat
+
 {- | O(n). Replace all the occurances of a given variable with a boolean
 literal. -}
 assign :: (Ord a) => [(a,Bool)] -> [ Expr a ] -> [ Expr a ]
@@ -188,6 +201,7 @@ interpretations xs =
 -- | Test if a given set of assignments is a solution
 isSolution :: (Ord a)=>[(a,Bool)] ->[Expr a] -> Bool
 isSolution binds = all isTrue . assign binds
+
 
 -------------------------------------------------------------------------------
 -- UTILITIES
