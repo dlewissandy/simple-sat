@@ -28,7 +28,7 @@ executable simple-sat
 library
   hs-source-dirs:      src
   exposed-modules:     Logic.Expression, Logic.Syntax
-  other-modules:       Logic.Expression.Internal
+  other-modules:       Logic.Expression.Internal,Text.Pretty
   build-depends:       base, vector, containers, attoparsec, text
   default-language:    Haskell2010
   ghc-options:         -O2 -Wall -Werror
@@ -44,6 +44,15 @@ test-suite simple-sat-test
                        , simple-sat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   default-language:    Haskell2010
+
+benchmark simple-sat-benchmark
+    hs-source-dirs: bench
+    main-is: Bench.hs
+    build-depends:    base, QuickCheck, random, criterion, simple-sat
+    type: exitcode-stdio-1.0
+    extra-libraries: blas
+    default-language: Haskell2010
+    ghc-options: -Wall -Werror -O2
 
 source-repository head
   type:     git
