@@ -5,7 +5,7 @@ module Logic.Expression.Internal(
     Internal,
     true, false,
     variable,
-    xor, and, ands, xors,
+    xor, and, ands, xors, or, equals, implies, not,
     -- Satisfiability
     isSat, interpretations, assign,
     ) where
@@ -15,7 +15,8 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import           Data.Bits hiding (xor)
 import qualified Data.Bits as B
-import Prelude hiding (and,or)
+import           Prelude hiding (and,or,not)
+import qualified Prelude as P
 
 {- | The internal representation of a logical expression encodes expresions
 in algebraic normal form as a vector of integers.   Each element in the Vector
@@ -41,6 +42,30 @@ true = V.singleton 0
 variable :: Int -> Internal
 {-# INLINE variable #-}
 variable = V.singleton . (2^)
+
+-- | O(n^2) - construct the disjunction of two expressions.  Terms will
+-- be arranged in descending term order.
+or :: Internal -> Internal -> Internal
+{-# INLINE or #-}
+or p q = (p `and` q) `xor` p `xor` q
+
+-- | O(n) - construct the material equivalence of two expressions.  Terms will
+-- be arranged in descending term order.
+equals :: Internal -> Internal -> Internal
+{-# INLINE equals #-}
+equals p q = not (p `xor` q)
+
+-- | O(n^2) - construct the material equivalence of two expressions.  Terms will
+-- be arranged in descending term order.
+implies :: Internal -> Internal -> Internal
+{-# INLINE implies #-}
+implies p q = (p `and` q) `xor` p `xor` true
+
+-- | O(n) - construct the logical negation of an expression.  Terms will
+-- be arranged in descending term order.
+not :: Internal -> Internal
+not p = p `xor` true
+
 
 -- | O(n) - construct the exclusive disjunction of two expressions.  Terms will
 -- be arranged in descending term order.
@@ -79,7 +104,7 @@ ands = foldr and true
 
 {- | O(2^n). Test for satisfiability. -}
 isSat :: [ Internal ] -> Bool
-isSat = not . S.null . interpretations
+isSat = P.not . S.null . interpretations
 
 {- | Replace all occurances of a set of variables with a boolean literal.  -}
 assign :: Internal -> Integer -> Bool ->  Internal

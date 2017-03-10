@@ -16,12 +16,24 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+executable simple-sat
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  build-depends:       base, text, optparse-applicative
+                       -- this repository
+                       , simple-sat
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O2 -Wall -Werror
+  default-language:    Haskell2010
+
 library
   hs-source-dirs:      src
-  exposed-modules:     Logic.Expression
+  exposed-modules:     Logic.Expression, Logic.Syntax
   other-modules:       Logic.Expression.Internal
-  build-depends:       base, vector, containers
+  build-depends:       base, vector, containers, attoparsec, text
   default-language:    Haskell2010
+  ghc-options:         -O2 -Wall -Werror
+  default-language:    Haskell2010
+
 
 test-suite simple-sat-test
   type:                exitcode-stdio-1.0
@@ -30,7 +42,7 @@ test-suite simple-sat-test
   build-depends:       base, vector, tasty, tasty-quickcheck, tasty-hunit
                        -- this repository
                        , simple-sat
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   default-language:    Haskell2010
 
 source-repository head

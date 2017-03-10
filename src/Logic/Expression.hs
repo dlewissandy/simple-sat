@@ -8,6 +8,10 @@ module Logic.Expression(
     variable,
     and,
     xor,
+    or,
+    implies,
+    equals,
+    not,
     ands,
     xors,
     -- * Query
@@ -19,19 +23,19 @@ module Logic.Expression(
     -- * Satisfiability
     isSat, interpretations, assign, isSolution,
     -- * Utilities
-    appendNamespaces
+    appendNamespaces, fromAST
     ) where
 
-import Prelude hiding (and)
+import qualified Prelude as P
+import Prelude hiding (and,or,not)
 -- FROM STACKAGE
-import           Data.Bits ((.|.),testBit)
 import qualified Data.Set as S
-import           Data.Vector(Vector)
 import qualified Data.Vector as V
-import           Data.List(sort, partition)
+import           Data.List(partition)
 -- FROM THIS PACKAGE
 import           Logic.Expression.Internal(Internal)
 import qualified Logic.Expression.Internal as L
+import           Logic.Syntax
 
 -------------------------------------------------------------------------------
 -- DATA STRUCTURES
@@ -70,20 +74,41 @@ true = EXPR [] (V.singleton 0)
 variable :: a -> Expr a
 variable a = EXPR [a] (V.singleton 1)
 
--- | /O(n^2) - Construct an expression representing the binary conjunction of
+-- | /O(n^2)/ - Construct an expression representing the binary conjunction of
 -- two expressions.
 and :: (Ord a)=>Expr a -> Expr a -> Expr a
 and = liftBinary L.and
 
--- | /O(n) - Construct an expression representing the binary exclusive
+-- | /O(n)/ - Construct an expression representing the binary exclusive
 -- disjunction of two expressions.
 xor :: (Ord a)=>Expr a -> Expr a -> Expr a
 xor = liftBinary L.xor
 
--- | /O(n) - Construct an expression representing the n-ary exclusive disjunction of
+-- | Construct an expression representing the n-ary exclusive disjunction of
 -- a list of expressions.
+or :: (Ord a)=>Expr a -> Expr a->Expr a
+or = liftBinary L.or
+
+-- | Construct an expression representing the n-ary exclusive disjunction of
+-- a list of expressions.
+implies :: (Ord a)=>Expr a -> Expr a ->Expr a
+implies = liftBinary L.implies
+
+-- | Construct an expression representing the n-ary exclusive disjunction of
+-- a list of expressions.
+equals :: (Ord a)=>Expr a -> Expr a ->Expr a
+equals = liftBinary L.equals
+
+-- | Construct an expression representing the n-ary exclusive disjunction of
+-- a list of expressions.
+not :: (Ord a)=>Expr a ->Expr a
+not = liftUnary L.not
+
+-- | /O(m*n) - Construct an expression representing the n-ary exclusive
+-- disjunction of a list of expressions.
 xors :: (Ord a)=>[Expr a]->Expr a
 xors = liftNary L.xors
+
 
 -- | /O(m*n^2) - Construct an expression representing the n-ary conjunction of
 -- a list of expressions.
@@ -101,7 +126,7 @@ isTrue (EXPR _ x) = x==V.singleton 0
 -- | O(1) - test for logical falsity.   Returns True if and only if the
 -- Expression is the boolean literal False.
 isFalse :: Expr a -> Bool
-isFalse z@(EXPR _ x )= V.null x
+isFalse (EXPR _ x )= V.null x
 
 -- | O(1) - Returns True if and only if the
 -- Expression consists of a single variable.
@@ -121,12 +146,6 @@ isConjunction :: Expr a -> Bool
 isConjunction (EXPR _ x) =
     let x0 = V.unsafeHead x
     in  (1 == V.length x) && ( x0 > 1 ) && ( 0 /= mod x0 2)
-
-{- | O(n). Return the list of variables which occur in an expression. -}
-variables :: (Ord a) => Expr a -> [a]
-variables (EXPR vs xs) =
-    let bits = V.foldr (.|.) 0 xs
-    in  [ vs!!i | i<-[0.. length vs - 1], bits `testBit` i]
 
 -------------------------------------------------------------------------------
 -- SATISFIABILITY
@@ -237,3 +256,19 @@ liftNary f xs = case xs of
     [] -> EXPR [] (f [])
     _  -> let xs'@((EXPR vs _ ) : _ ) = appendNamespaces xs
           in  EXPR vs $ f $ fmap (\ (EXPR _ z) -> z) xs'
+
+-- | Given an unary logical operator on the internal representation, lift it
+-- to the Expr type.
+liftUnary :: (Ord a) => (Internal -> Internal )
+   -> Expr a -> Expr a
+liftUnary f (EXPR vs e) = EXPR vs $ f e
+
+fromAST :: AST -> Expr String
+fromAST (LIT b) = if b==1 then true else false
+fromAST (VAR s) = variable s
+fromAST (NOT e) = (fromAST e) `xor` true
+fromAST (BINOP XOR x y) = (fromAST x) `xor` (fromAST y)
+fromAST (BINOP AND x y) = (fromAST x) `and` (fromAST y)
+fromAST (BINOP OR  x y) = (fromAST x) `or` (fromAST y)
+fromAST (BINOP IMPLIES x y) = (fromAST x) `implies` (fromAST y)
+fromAST (BINOP EQUALS x y) = (fromAST x) `equals` (fromAST y)
