@@ -5,6 +5,7 @@ import Data.Attoparsec.Text
 import Control.Applicative
 import Data.Text as Text
 import Data.Text.IO as TIO
+import Text.Pretty
 
 data AST
   = LIT Int
@@ -81,3 +82,22 @@ implies = infixOp "=>" (BINOP IMPLIES)
 
 equals :: Parser (AST -> AST -> AST)
 equals = infixOp "==" (BINOP EQUALS)
+
+instance Pretty AST where
+    prettyTab _ = aux
+        where
+            aux ex = case ex of
+                LIT b -> show b
+                VAR v -> v
+                NOT (LIT b) -> "~"++show b
+                NOT (VAR v) -> "~"++v
+                NOT e  -> "~( " ++ aux e ++ " )"
+                BINOP op a b -> showarg a ++ showOp op ++ showarg b
+            showOp op = case op of
+                XOR -> " + "
+                AND -> "*"
+                OR -> " || "
+                IMPLIES -> " => "
+                EQUALS -> " == "
+            showarg e@(BINOP _ _ _ ) = "( " ++ aux e ++ " )"
+            showarg x = aux x

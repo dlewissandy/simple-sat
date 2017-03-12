@@ -9,7 +9,9 @@ import Data.Semigroup ((<>))
 data Opts = OPTS
   { fpath  :: String
   , showsyntax  :: Bool
+  , showprettysyntax :: Bool
   , showanf :: Bool
+  , showprettyanf :: Bool
   , showsolution :: Bool }
 
 opts :: ParserInfo Opts
@@ -32,9 +34,17 @@ oparse = OPTS
          <> short 's'
          <> help "output the parser results" )
       <*> switch
+          ( long "show-pretty-syntax"
+         <> short 'S'
+         <> help "output the parser results in human readable format" )
+      <*> switch
             ( long "show-normal-form"
            <> short 'n'
            <> help "output the algebraic normal form" )
+      <*> switch
+            ( long "show-pretty-normal-form"
+           <> short 'N'
+           <> help "output the algebraic normal form in human readable format" )
       <*> switch
             ( long "no-show-solutions"
            <> short 'z'
@@ -52,9 +62,19 @@ main = do
                    _ <- mapM print ast
                    return ()
         False -> return ()
+    case showprettysyntax of
+        True -> do putStrLn "------- SYNTAX --------- "
+                   _ <- mapM (putStrLn . (++";") .pretty) ast
+                   return ()
+        False -> return ()
     case showanf of
         True -> do putStrLn "--------- ANF ----------"
                    _ <- mapM print anf
+                   return ()
+        _ -> return ()
+    case showprettyanf of
+        True -> do putStrLn "--------- ANF ----------"
+                   _ <- mapM (putStrLn . (++";") .pretty) anf
                    return ()
         _ -> return ()
     case showsolution of
