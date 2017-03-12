@@ -12,6 +12,8 @@ module Logic.Expression.Internal(
 
 import           Data.Set(Set)
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
+import           Data.Maybe
 import qualified Data.Vector as V
 import           Data.Bits hiding (xor)
 import qualified Data.Bits as B
@@ -97,7 +99,62 @@ xors = foldr xor false
 -- | O(n^2) - construct the logical conjunction of two expressions
 and :: Internal -> Internal -> Internal
 {-# INLINE and #-}
-and p q = foldr xor false [ V.singleton $ (V.unsafeIndex p i) .|.  (V.unsafeIndex q j) | i<-[0..V.length p - 1],j<-[0..V.length q -1] ]
+and p q = case V.null p of
+    True -> V.empty
+    _    -> case V.null q of
+        True -> V.empty
+        _    -> V.reverse (heapMul Nothing (M.empty) (V.reverse p) q)
+    where
+        -- Alternately (non-strictly) storing and retreiving elements
+        -- in an intermediate heap.  Elements can be retrieved when
+        -- either there are no more elements left to store, or when
+        -- the element being stored is greater than the least element
+        -- in the heap.
+        --heapMul :: Maybe BitVec -> M.Map BitVec Int -> V.Vector BitVec -> V.Vector BitVec -> V.Vector BitVec
+        {-# INLINE heapMul #-}
+        heapMul z h xxs ys =
+            if V.null xxs
+                then flush h
+                else case (Just x > z && P.not (isNothing z)) of
+                    True -> case retrieve h of
+                        Left (!a,z',h') -> a `V.cons` heapMul z' h' xxs ys
+                        Right (z', h') -> heapMul z' h' xxs ys
+                    False ->
+                        let (z',h') = store h ys x
+                        in  heapMul z' h' xs ys
+             where x = V.unsafeHead xxs
+                   xs = V.unsafeTail xxs
+        -- Multiply each term in ys by x, storing the term products in the heap.
+        -- update the least element
+        store h ys !x =
+            let h' = V.foldr (\y z ->
+                    let m = y .|. x
+                        -- multiplying a two monomials can be achieved by
+                        -- bitwise or of their integer encodings
+                    in  M.alter (\ zz -> case zz of
+                            Nothing -> Just 1
+                            Just cnt -> Just (cnt+1)) m z )  h ys
+                --  find the new least element in the heap.   it should be
+                -- either the least term in ys * x, or the previous least element
+                z' = fst.M.findMin $ h' -- O(log n)
+            in  (Just z', h')
+
+        -- O(log(n)) Retrieve the least element from the heap and update the
+        -- least elem retrieve
+        retrieve h =
+            let ((m,cnt),h') = M.deleteFindMin h  -- O(log(n))
+                z' = if M.null h'
+                        then Nothing else
+                             Just (fst  (M.findMin h')) -- O(log(n))
+            in  case (cnt `P.mod` 2) of
+                    0 -> Right (z',h')
+                    _ -> Left (m, z', h')
+        -- O(n) Flush the elements from the heap.  Keep only the elements where
+        -- the incidence is odd because (x `xor` x = false).
+        flush :: M.Map Integer Int -> Internal
+        flush h =
+            let hs = V.fromList $ M.toAscList h
+            in  V.map fst . (V.filter (\(_,cnt) -> cnt `P.mod` 2 == 1)) $ hs
 
 -- | O(n^3) - construct the n-ary logical conjunction of a list of expressions
 ands :: [Internal] -> Internal
