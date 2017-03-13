@@ -7,12 +7,13 @@ module Logic.Expression.Internal(
     variable,
     xor, and, ands, xors, or, equals, implies, not, ors,
     -- Satisfiability
-    isSat, interpretations, assign, identifiers
+    isSat, interpretations, assign, identifiers,
+    -- utility
+    alter
     ) where
 
 import           Data.Set(Set)
 import qualified Data.Set as S
-import qualified Data.Map.Strict as M
 import           Data.Maybe
 import qualified Data.Vector as V
 import           Data.Bits hiding (xor)
@@ -103,7 +104,7 @@ and p q = case V.null p of
     True -> V.empty
     _    -> case V.null q of
         True -> V.empty
-        _    -> V.reverse (heapMul Nothing (M.empty) (V.reverse p) q)
+        _    -> V.reverse (heapMul Nothing (V.empty) (V.reverse p) q)
     where
         -- Alternately (non-strictly) storing and retreiving elements
         -- in an intermediate heap.  Elements can be retrieved when
@@ -131,30 +132,27 @@ and p q = case V.null p of
                     let m = y .|. x
                         -- multiplying a two monomials can be achieved by
                         -- bitwise or of their integer encodings
-                    in  M.alter (\ zz -> case zz of
+                    in  alter (\ zz -> case zz of
                             Nothing -> Just 1
                             Just cnt -> Just (cnt+1)) m z )  h ys
                 --  find the new least element in the heap.   it should be
                 -- either the least term in ys * x, or the previous least element
-                z' = fst.M.findMin $ h' -- O(log n)
+                z' = fst . findMin $ h' -- O(log n)
             in  (Just z', h')
 
         -- O(log(n)) Retrieve the least element from the heap and update the
         -- least elem retrieve
         retrieve h =
-            let ((m,cnt),h') = M.deleteFindMin h  -- O(log(n))
-                z' = if M.null h'
+            let ((m,cnt),h') = deleteFindMin h  -- O(log(n))
+                z' = if V.null h'
                         then Nothing else
-                             Just (fst  (M.findMin h')) -- O(log(n))
+                             Just (fst (  findMin h')) -- O(log(n))
             in  case (cnt `P.mod` 2) of
                     0 -> Right (z',h')
                     _ -> Left (m, z', h')
         -- O(n) Flush the elements from the heap.  Keep only the elements where
         -- the incidence is odd because (x `xor` x = false).
-        flush :: M.Map Integer Int -> Internal
-        flush h =
-            let hs = V.fromList $ M.toAscList h
-            in  V.map fst . (V.filter (\(_,cnt) -> cnt `P.mod` 2 == 1)) $ hs
+        flush h =V.map fst . (V.filter (\(_,cnt) -> cnt `P.mod` 2 == 1)) $ h
 
 -- | O(n^3) - construct the n-ary logical conjunction of a list of expressions
 ands :: [Internal] -> Internal
@@ -230,3 +228,62 @@ identifiers :: Internal -> [Int]
 identifiers expr =
     let vars = variables expr
     in  [ident | ident <- takeWhile (\i->vars>=2^i) [0..], testBit vars ident]
+
+--------------------------------------------------------------------------------
+-- Replacing Map operations with Vectors of tuples ordered in descending order
+-- of their first element.
+--------------------------------------------------------------------------------
+deleteFindMin :: V.Vector (Integer,Int) -> ((Integer,Int),V.Vector (Integer,Int))
+{-# INLINE deleteFindMin #-}
+deleteFindMin x = ( V.unsafeHead x, V.unsafeTail x)
+
+findMin :: V.Vector (Integer,Int) -> (Integer,Int)
+{-# INLINE findMin #-}
+findMin = V.unsafeHead
+
+-- | O(log n) - insert, delete or modify an element in an ascending list of
+-- key value pairs.
+alter :: (Maybe Int -> Maybe Int) -> Integer -> V.Vector (Integer,Int) -> V.Vector (Integer,Int)
+{-# INLINE alter #-}
+alter f k0 vs = case V.null vs of
+    -- Special case for the empty vector.   We know that the element wont be
+    -- found, so we don't have to search.
+    True -> case f Nothing of
+        Just !v' -> V.singleton (k0,v')
+        _       -> vs
+    -- If the vector is not empty, then we need to search for an existing element
+    -- with the specified monomial key and perform the desired alteration on that
+    -- element.
+    _    -> go 0 (V.length vs - 1)
+    where
+    {-# INLINE [0] go #-}
+    go !l !h = case l==h of
+        -- When the upper and lower bounds are equal, then our search is over.
+        True  -> let (k,v) = vs `V.unsafeIndex` l
+             -- does the found key, k, match the search key, k0.   If it does
+             -- then alter the value stored at that location, otherwise,
+             -- possibly add a new element
+            in case compare k0 k of
+                GT -> case f Nothing of
+                    -- The search key is less than the found key.   Since we
+                    -- are maintining the list in DESCENDING order of the keys,
+                    -- we will either add the element after the found element
+                    -- or do nothing.
+                    Just v' -> let (ls,rs) = V.splitAt (l) vs
+                               in  ls V.++ (k0,v') `V.cons` rs
+                    _       -> vs
+                EQ -> case f $ Just v of
+                    Just v' -> let (ls,rs) = V.splitAt (l) vs
+                               in  ls V.++ (k0,v') `V.cons` (V.tail rs)
+                    Nothing -> let (ls,rs) = V.splitAt (l) vs
+                               in  ls V.++ V.unsafeTail rs
+                LT -> case f Nothing of
+                    Just v' -> let (ls,rs) = V.splitAt (l+1) vs
+                               in  ls V.++ (k0,v') `V.cons` rs
+                    _       -> vs
+        False ->
+            let i = (l+h) `div` 2
+            in case compare k0 (fst $ vs V.! i) of
+                GT -> go l (max (i-1) l)
+                EQ -> go i i
+                LT -> go (min (i+1) h) h
