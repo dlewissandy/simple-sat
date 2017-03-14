@@ -8,8 +8,6 @@ module Logic.Expression.Internal(
     xor, and, ands, xors, or, equals, implies, not, ors,
     -- Satisfiability
     isSat, interpretations, assign, identifiers,
-    -- utility
-    alter
     ) where
 
 import           Data.Set(Set)
@@ -137,16 +135,17 @@ and p q = case V.null p of
                             Just cnt -> Just (cnt+1)) m z )  h ys
                 --  find the new least element in the heap.   it should be
                 -- either the least term in ys * x, or the previous least element
-                z' = fst . findMin $ h' -- O(log n)
+                z' = fst . V.unsafeHead $ h' -- O(log n)
             in  (Just z', h')
 
         -- O(log(n)) Retrieve the least element from the heap and update the
         -- least elem retrieve
         retrieve h =
-            let ((m,cnt),h') = deleteFindMin h  -- O(log(n))
+            let (m,cnt) = V.unsafeHead h
+                h' = V.unsafeTail h
                 z' = if V.null h'
                         then Nothing else
-                             Just (fst (  findMin h')) -- O(log(n))
+                             Just . fst $ V.unsafeHead h' -- O(log(n))
             in  case (cnt `P.mod` 2) of
                     0 -> Right (z',h')
                     _ -> Left (m, z', h')
@@ -229,20 +228,9 @@ identifiers expr =
     let vars = variables expr
     in  [ident | ident <- takeWhile (\i->vars>=2^i) [0..], testBit vars ident]
 
---------------------------------------------------------------------------------
--- Replacing Map operations with Vectors of tuples ordered in descending order
--- of their first element.
---------------------------------------------------------------------------------
-deleteFindMin :: V.Vector (Integer,Int) -> ((Integer,Int),V.Vector (Integer,Int))
-{-# INLINE deleteFindMin #-}
-deleteFindMin x = ( V.unsafeHead x, V.unsafeTail x)
-
-findMin :: V.Vector (Integer,Int) -> (Integer,Int)
-{-# INLINE findMin #-}
-findMin = V.unsafeHead
-
 -- | O(log n) - insert, delete or modify an element in an ascending list of
--- key value pairs.
+-- key value pairs.  This function is used by "and" to store intermediate values
+-- but is not exported from this module.
 alter :: (Maybe Int -> Maybe Int) -> Integer -> V.Vector (Integer,Int) -> V.Vector (Integer,Int)
 {-# INLINE alter #-}
 alter f k0 vs = case V.null vs of
@@ -269,7 +257,7 @@ alter f k0 vs = case V.null vs of
                     -- are maintining the list in DESCENDING order of the keys,
                     -- we will either add the element after the found element
                     -- or do nothing.
-                    Just v' -> let (ls,rs) = V.splitAt (l) vs
+                    Just v' -> let (ls,rs) = V.splitAt (l+1) vs
                                in  ls V.++ (k0,v') `V.cons` rs
                     _       -> vs
                 EQ -> case f $ Just v of
@@ -278,12 +266,12 @@ alter f k0 vs = case V.null vs of
                     Nothing -> let (ls,rs) = V.splitAt (l) vs
                                in  ls V.++ V.unsafeTail rs
                 LT -> case f Nothing of
-                    Just v' -> let (ls,rs) = V.splitAt (l+1) vs
+                    Just v' -> let (ls,rs) = V.splitAt (l) vs
                                in  ls V.++ (k0,v') `V.cons` rs
                     _       -> vs
         False ->
             let i = (l+h) `div` 2
             in case compare k0 (fst $ vs V.! i) of
-                GT -> go l (max (i-1) l)
+                LT -> go l (max (i-1) l)
                 EQ -> go i i
-                LT -> go (min (i+1) h) h
+                GT -> go (min (i+1) h) h
