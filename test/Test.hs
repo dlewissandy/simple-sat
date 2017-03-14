@@ -38,31 +38,39 @@ alltests = testGroup "simple-sat" [
         isAssociative "isAssociative" xor,
         isCommutative "isCommutative" xor,
         isNeutralElementOf "NeutralElem" false xor,
-        areInverseElementsOf "Inverses" id xor false Nothing
+        areInverseElementsOf "Inverses" id xor false Nothing,
+        termOrdering "TermOrdering" xor
         ],
     testGroup "or" [
         testProperty "deMorgan" $
             forAll arbitrary $ \ p ->
             forAll arbitrary $ \ q ->
-                p `or` q == not ((not p) `and` (not q :: Expr Char))
+                p `or` q == not ((not p) `and` (not q :: Expr Char)),
+        termOrdering "TermOrdering" or
         ],
     testGroup "not" [
         testProperty "not p = p+1" $
             forAll arbitrary $ \ p ->
-                not p == p `xor` t
+                not p == p `xor` t,
+        termOrdering "TermOrdering" (\ _ -> not)
         ],
     testGroup "implies" [
         testProperty "p=>q = (not p) or q" $
             forAll arbitrary $ \ p -> forAll arbitrary $ \q ->
-                p `implies` q == (not p) `or` (q::Expr Char)
+                p `implies` q == (not p) `or` (q::Expr Char),
+        termOrdering "TermOrdering" implies
         ],
     testGroup "equals" [
         testProperty "p<=>q = not (p `xor` q)" $
             forAll arbitrary $ \ p -> forAll arbitrary $ \q ->
-                p `equals` q == not (p `xor` (q::Expr Char))
+                p `equals` q == not (p `xor` (q::Expr Char)),
+        termOrdering "TermOrdering" equals
         ],
     testGroup "xors" [
         isFold "isFold" xors xor false
+        ],
+    testGroup "ors" [
+        isFold "isFold" ors or false
         ],
     testGroup "and" [
         testCase "and(true,true)" $ assertBool "" $ isTrue $ t `and` t,
@@ -73,7 +81,8 @@ alltests = testGroup "simple-sat" [
         isCommutative "isCommutative" and,
         isNeutralElementOf "NeutralElem" true and,
         distributesOver "distributes" and xor,
-        isZeroElementOf "zeroElem" false and
+        isZeroElementOf "zeroElem" false and,
+        termOrdering "TermOrdering" and
         ],
     testGroup "ands" [
         isFold "isFold" ands and true
@@ -116,6 +125,12 @@ alltests = testGroup "simple-sat" [
                      else error $ "assign (interpretations xs) xs="++show (fmap (\z ->assign z xs') zs) ++
                                   "\n interpretations xs = "++show zs
         ]
+    -- Verify that a binary operation preserves term ordering
+    termOrdering :: String -> (Expr Char -> Expr Char -> Expr Char) -> TestTree
+    termOrdering testname op = testProperty testname $
+        forAll arbitrary $ \ x->
+        forAll arbitrary $ \ y->
+            isTermOrdered $ x `op` y
 
 isAssociative :: String -> (Expr Char -> Expr Char -> Expr Char) -> TestTree
 isAssociative testname op = testProperty testname $

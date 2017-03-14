@@ -5,9 +5,9 @@ module Logic.Expression.Internal(
     Internal,
     true, false,
     variable,
-    xor, and, ands, xors, or, equals, implies, not,
+    xor, and, ands, xors, or, equals, implies, not, ors,
     -- Satisfiability
-    isSat, interpretations, assign,
+    isSat, interpretations, assign, identifiers
     ) where
 
 import           Data.Set(Set)
@@ -64,8 +64,14 @@ implies p q = (p `and` q) `xor` p `xor` true
 -- | O(n) - construct the logical negation of an expression.  Terms will
 -- be arranged in descending term order.
 not :: Internal -> Internal
+{-# INLINE not #-}
 not p = p `xor` true
 
+-- | O(n^2) - construct the n-ary disjunctin of a list of expressions.  Terms
+-- will be expressed in descending term order.
+ors :: [ Internal ] -> Internal
+{-# INLINE ors #-}
+ors = foldr or false
 
 -- | O(n) - construct the exclusive disjunction of two expressions.  Terms will
 -- be arranged in descending term order.

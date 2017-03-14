@@ -1,4 +1,4 @@
-
+{-# LANGUAGE FlexibleContexts #-}
 module Logic.Expression(
     -- * Datatypes
     Expr,
@@ -14,16 +14,20 @@ module Logic.Expression(
     not,
     ands,
     xors,
+    ors,
     -- * Query
     isTrue,
     isFalse,
     isVariable,
     isDisjunction,
     isConjunction,
+    isTermOrdered,
     -- * Satisfiability
     isSat,isRefutable,isConflict,isTautology, interpretations, assign, isSolution,
     -- * Utilities
-    appendNamespaces, fromAST
+    appendNamespaces, fromAST,
+    -- * Pretty Printing
+    pretty, prettyPrint
     ) where
 
 import qualified Prelude as P
@@ -31,11 +35,12 @@ import Prelude hiding (and,or,not)
 -- FROM STACKAGE
 import qualified Data.Set as S
 import qualified Data.Vector as V
-import           Data.List(partition)
+import           Data.List(partition,sortBy,sort)
 -- FROM THIS PACKAGE
 import           Logic.Expression.Internal(Internal)
 import qualified Logic.Expression.Internal as L
 import           Logic.Syntax
+import           Text.Pretty
 
 -------------------------------------------------------------------------------
 -- DATA STRUCTURES
@@ -109,6 +114,10 @@ not = liftUnary L.not
 xors :: (Ord a)=>[Expr a]->Expr a
 xors = liftNary L.xors
 
+-- | /O(m*n) - Construct an expression representing the n-ary
+-- disjunction of a list of expressions.
+ors :: (Ord a)=>[Expr a]->Expr a
+ors = liftNary L.ors
 
 -- | /O(m*n^2) - Construct an expression representing the n-ary conjunction of
 -- a list of expressions.
@@ -286,3 +295,26 @@ fromAST (BINOP AND x y) = (fromAST x) `and` (fromAST y)
 fromAST (BINOP OR  x y) = (fromAST x) `or` (fromAST y)
 fromAST (BINOP IMPLIES x y) = (fromAST x) `implies` (fromAST y)
 fromAST (BINOP EQUALS x y) = (fromAST x) `equals` (fromAST y)
+
+instance (Pretty ident, Ord ident) => Pretty (Expr ident) where
+    prettyTab n = aux
+        where
+            aux ex
+                | isFalse ex       = "False"
+                | isTrue ex        = "True"
+                | isVariable ex    = prettyTab n (fromVariable ex)
+                | isDisjunction ex = showSet " + " (fromDisjunction ex)
+                | isConjunction ex = showSet "*" (fromConjunction ex)
+                where
+                    showSet sep (x:y:[]) = prettyTab n x ++ sep ++ pretty y
+                    showSet sep (x:xs)   = prettyTab n x ++ sep ++ showSet sep xs
+                    showSet _ _ = error "non-empty list with no elements"
+            aux _ = error "unknown expression type"
+            fromVariable  (EXPR vs e) =  vs!!(head (L.identifiers e))
+            fromConjunction (EXPR vs e) = fmap (variable . (vs!!) ) (L.identifiers e)
+            fromDisjunction (EXPR vs e) = V.toList $ V.map ((EXPR vs).(V.singleton )) e
+
+isTermOrdered :: (Ord ident) => Expr ident -> Bool
+isTermOrdered (EXPR vs e) =
+    let xs = V.toList e in vs == sort vs
+            && xs == sortBy (\ a b -> compare b a ) xs
