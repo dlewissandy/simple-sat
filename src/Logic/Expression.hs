@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Logic.Expression(
     -- * Datatypes
     Expr,
@@ -33,6 +35,8 @@ module Logic.Expression(
 import qualified Prelude as P
 import Prelude hiding (and,or,not)
 -- FROM STACKAGE
+import GHC.Generics
+import Control.DeepSeq
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import           Data.List(partition,sortBy,sort)
@@ -55,7 +59,7 @@ encoding structure represents the proposition in as a set of integers, whose bit
 represent the incidence of each identifier in a term.   The smart constructors
 ensure that the internal encoding is always in algebraic normal form.
 -}
-data Expr a = EXPR [a] Internal deriving (Show)
+data Expr a = EXPR [a] Internal deriving (Show, Generic, NFData)
 
 instance (Eq a, Ord a) => Eq (Expr a) where
     (==) x y =
@@ -205,7 +209,7 @@ interpretations [] = [[]]
 interpretations xs =
     let xs'@((EXPR vs _ ):_) = appendNamespaces xs
         zs = fmap (\ (EXPR _ a) -> a) xs'
-    in  fmap (fmap (\ (i,b)->(vs!!i,b) ) . S.toList ) (S.toList $ L.interpretations zs)
+    in  fmap (fmap (\(i,b)->(vs!!i,b)) . S.toAscList) $  S.toAscList $ L.interpretations zs
 
 -- | Test if a given set of assignments is a solution
 isSolution :: (Ord a)=>[(a,Bool)] ->[Expr a] -> Bool
