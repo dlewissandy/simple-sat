@@ -27,8 +27,8 @@ executable simple-sat
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Logic.Expression, Logic.Syntax
-  other-modules:       Logic.Expression.Internal,Text.Pretty
+  exposed-modules:     Logic.Expression, Logic.Syntax,Text.Pretty
+  other-modules:       Logic.Expression.Internal
   build-depends:       base, vector, containers, attoparsec, text, deepseq
   default-language:    Haskell2010
   ghc-options:         -O2 -Wall -Werror
